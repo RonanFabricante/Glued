@@ -1,10 +1,14 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+type CookieToSet = {
+  name: string;
+  value: string;
+  options?: Parameters<NextResponse['cookies']['set']>[2];
+};
+
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  });
+  let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,26 +18,20 @@ export async function updateSession(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(
-  cookiesToSet: Array<{
-    name: string;
-    value: string;
-    options?: Parameters<typeof request.cookies.set>[2];
-  }>
-) {
-  cookiesToSet.forEach(({ name, value, options }) => {
-    request.cookies.set(name, value, options);
-  });
+        setAll(cookiesToSet: CookieToSet[]) {
+          // Keep request cookies in sync
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value);
+          });
 
-  supabaseResponse = NextResponse.next({
-    request,
-  });
+          // Recreate the response so downstream sees updated request cookies
+          supabaseResponse = NextResponse.next({ request });
 
-  cookiesToSet.forEach(({ name, value, options }) => {
-    supabaseResponse.cookies.set(name, value, options);
-  });
-}
-,
+          // Set cookies on the outgoing response
+          cookiesToSet.forEach(({ name, value, options }) => {
+            supabaseResponse.cookies.set(name, value, options);
+          });
+        },
       },
     }
   );
@@ -41,7 +39,6 @@ export async function updateSession(request: NextRequest) {
   // IMPORTANT: Avoid writing any logic between createServerClient and
   // supabase.auth.getUser(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
-
   const {
     data: { user },
   } = await supabase.auth.getUser();
