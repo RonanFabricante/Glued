@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import DashboardSlot from '@/components/DashboardSlot';
 import ExpiredConnectionsNotice from '@/components/ExpiredConnectionsNotice';
 import LogoutButton from '@/components/LogoutButton';
+import DeleteProfileButton from '@/components/DeleteProfileButton';
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -35,6 +36,7 @@ export default async function DashboardPage() {
             <h1 className="text-2xl font-bold text-calm-900">Glued</h1>
             <div className="flex items-center gap-4">
               <div className="text-sm text-calm-600">Hello, {profile.first_name}</div>
+              <DeleteProfileButton />
               <LogoutButton />
             </div>
           </div>

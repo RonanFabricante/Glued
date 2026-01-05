@@ -66,3 +66,30 @@ export async function updateProfile(data: Partial<CreateProfileData>) {
   revalidatePath('/dashboard');
   return { success: true };
 }
+
+export async function deleteProfile() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('Not authenticated');
+  }
+
+  // Delete the profile first
+  const { error } = await supabase
+    .from('profiles')
+    .delete()
+    .eq('id', user.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  // Sign out the user
+  await supabase.auth.signOut();
+
+  revalidatePath('/');
+  redirect('/login');
+}
