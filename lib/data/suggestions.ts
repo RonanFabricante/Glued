@@ -18,10 +18,11 @@ export async function getSuggestion(): Promise<Profile | null> {
 
   if (!currentProfile) return null;
 
-  // Get users the current user is NOT already connected with
+  // Get users the current user is NOT already connected with (only ACTIVE connections)
   const { data: existingConnections } = await supabase
     .from('connections')
     .select('user_a, user_b')
+    .eq('status', 'active')
     .or(`user_a.eq.${user.id},user_b.eq.${user.id}`);
 
   const connectedUserIds = new Set<string>();
