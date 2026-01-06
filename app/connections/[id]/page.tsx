@@ -2,7 +2,8 @@ import { getConnection } from '@/lib/data/connections';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { calculateDaysRemaining } from '@/lib/data/connections';
-import MessagePlaceholder from '@/components/MessagePlaceholder';
+import ChatInterface from '@/components/ChatInterface';
+import { createClient } from '@/lib/supabase/server';
 
 interface ConnectionPageProps {
   params: Promise<{ id: string }>;
@@ -14,6 +15,16 @@ export default async function ConnectionPage({ params }: ConnectionPageProps) {
 
   if (!connection) {
     redirect('/dashboard');
+  }
+
+  // Get current user ID for chat
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect('/login');
   }
 
   const daysRemaining = calculateDaysRemaining(connection.expires_at);
@@ -109,7 +120,10 @@ export default async function ConnectionPage({ params }: ConnectionPageProps) {
               Resolve connection
             </Link>
 
-            <MessagePlaceholder />
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-calm-900 mb-4">Messages</h3>
+              <ChatInterface connectionId={connection.id} currentUserId={user.id} />
+            </div>
           </>
         )}
 
