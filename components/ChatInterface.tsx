@@ -20,6 +20,10 @@ export default function ChatInterface({ connectionId, currentUserId }: ChatInter
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   const loadMessages = async () => {
     try {
       setLoading(true);
@@ -111,41 +115,12 @@ export default function ChatInterface({ connectionId, currentUserId }: ChatInter
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [connectionId, currentUserId]);
+  }, [connectionId, currentUserId, supabase]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  const loadMessages = async () => {
-    try {
-      setLoading(true);
-      const result = await getMessages(connectionId);
-      if (result.error) {
-        setError(result.error);
-      } else if (result.data) {
-        setMessages(result.data);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load messages');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const markMessagesAsRead = async () => {
-    try {
-      await markAsRead(connectionId);
-    } catch (err) {
-      // Silently fail - not critical
-      console.error('Failed to mark messages as read:', err);
-    }
-  };
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
