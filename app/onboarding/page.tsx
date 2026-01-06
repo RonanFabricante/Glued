@@ -26,6 +26,8 @@ export default function OnboardingPage() {
   // Form state
   const [firstName, setFirstName] = useState('');
   const [area, setArea] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [ageError, setAgeError] = useState('');
   const [intentTypes, setIntentTypes] = useState<string[]>([]);
   const [availability, setAvailability] = useState<string[]>([]);
 
@@ -51,10 +53,44 @@ export default function OnboardingPage() {
     );
   };
 
+  const validateAge = (dob: string): boolean => {
+    if (!dob) return false;
+    
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age >= 18;
+  };
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDateOfBirth(e.target.value);
+    setAgeError('');
+    
+    if (e.target.value) {
+      if (!validateAge(e.target.value)) {
+        setAgeError('You must be at least 18 years old to join');
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setAgeError('');
+
+    // Validate age before submitting
+    if (!dateOfBirth || !validateAge(dateOfBirth)) {
+      setAgeError('You must be at least 18 years old to join');
+      setLoading(false);
+      return;
+    }
 
     try {
       const {
@@ -156,6 +192,25 @@ export default function OnboardingPage() {
                 placeholder="San Francisco"
                 className="input-field"
               />
+            </div>
+
+            <div>
+              <label htmlFor="dateOfBirth" className="block text-sm font-medium text-calm-700 mb-2">
+                Date of Birth
+              </label>
+              <input
+                id="dateOfBirth"
+                type="date"
+                value={dateOfBirth}
+                onChange={handleDateChange}
+                required
+                max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+                className="input-field"
+              />
+              {ageError && (
+                <p className="text-sm text-red-700 mt-1">{ageError}</p>
+              )}
+              <p className="text-xs text-calm-600 mt-1">You must be at least 18 years old to join</p>
             </div>
 
             <div>
