@@ -59,7 +59,11 @@ export default function ChatInterface({ connectionId, currentUserId }: ChatInter
   // Set up real-time subscription
   useEffect(() => {
     const channel = supabase
-      .channel(`messages:${connectionId}`)
+      .channel(`messages:${connectionId}`, {
+        config: {
+          broadcast: { self: true },
+        },
+      })
       .on(
         'postgres_changes',
         {
@@ -71,18 +75,41 @@ export default function ChatInterface({ connectionId, currentUserId }: ChatInter
         async (payload) => {
           // Fetch the new message with sender profile
           const newMessage = payload.new as any;
+          
+          // Check if message already exists (from optimistic update) and add/update it
+          setMessages((prev) => {
+            const exists = prev.some((msg) => msg.id === newMessage.id || msg.id === `temp-${newMessage.id}`);
+            
+            if (exists) {
+              // Update existing message (replace optimistic one)
+              return prev.map((msg) => {
+                if (msg.id === newMessage.id || msg.id === `temp-${newMessage.id}`) {
+                  return { ...newMessage, sender: msg.sender || null };
+                }
+                return msg;
+              });
+            } else {
+              // Add new message (will fetch sender profile below)
+              return [...prev, { ...newMessage, sender: null }];
+            }
+          });
+
+          // Always fetch sender profile to ensure we have it
           const { data: profile } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', newMessage.sender_id)
             .single();
 
-          const messageWithSender: MessageWithSender = {
-            ...newMessage,
-            sender: profile,
-          };
-
-          setMessages((prev) => [...prev, messageWithSender]);
+          if (profile) {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === newMessage.id
+                  ? { ...msg, sender: profile }
+                  : msg
+              )
+            );
+          }
           
           // Mark as read if it's not from current user
           if (newMessage.sender_id !== currentUserId) {
@@ -110,7 +137,15 @@ export default function ChatInterface({ connectionId, currentUserId }: ChatInter
           );
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Real-time subscription active');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Real-time subscription error');
+          // Fallback: reload messages if subscription fails
+          loadMessages();
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -129,17 +164,60 @@ export default function ChatInterface({ connectionId, currentUserId }: ChatInter
 
     setSending(true);
     setError('');
+    setNewMessage('');
+
+    // Optimistically add message to UI immediately
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMessage: MessageWithSender = {
+      id: tempId,
+      connection_id: connectionId,
+      sender_id: currentUserId,
+      content: trimmedMessage,
+      created_at: new Date().toISOString(),
+      read_at: null,
+      sender: {
+        id: currentUserId,
+        first_name: 'You', // Temporary, will be replaced by real-time update
+        area: null,
+        intent_types: [],
+        availability: {},
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    };
+
+    setMessages((prev) => [...prev, optimisticMessage]);
+    scrollToBottom();
 
     try {
       const result = await sendMessage(connectionId, trimmedMessage);
       if (result.error) {
+        // Remove optimistic message on error
+        setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
         setError(result.error);
-      } else {
-        setNewMessage('');
-        // Message will be added via real-time subscription
+        setNewMessage(trimmedMessage); // Restore message text
+      } else if (result.data) {
+        // Replace optimistic message with real one (in case real-time doesn't fire)
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', currentUserId)
+          .single();
+
+        const realMessage: MessageWithSender = {
+          ...result.data,
+          sender: profile,
+        };
+
+        setMessages((prev) =>
+          prev.map((msg) => (msg.id === tempId ? realMessage : msg))
+        );
       }
     } catch (err: any) {
+      // Remove optimistic message on error
+      setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
       setError(err.message || 'Failed to send message');
+      setNewMessage(trimmedMessage); // Restore message text
     } finally {
       setSending(false);
     }
